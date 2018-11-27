@@ -1,0 +1,415 @@
+1.getpwnam(3)、getpwuid(3)
+复制代码
+
+1 getpwnam, getpwuid - get password file entry
+2 
+3 #include <sys/types.h>
+4 #include <pwd.h>
+5 
+6 struct passwd *getpwnam(const char *name);
+7 
+8 struct passwd *getpwuid(uid_t uid);
+
+复制代码
+
+/etc/passwd 文件中保存了系统中每个用户的用户名、UID 和 GID 等信息。
+
+但是这个文件在不同的系统中保存的格式是不一样的，如果一个程序直接用文件流去读取里面的内容，那么这个程序的可移植性就被降低了。
+
+老版本的BSD 使用 BDB (BSDDB) 数据库保存用户信息；
+
+HPUnix 使用文件系统 hash 方式保存用户信息；
+
+POSIX.1、FreeBSD 8.0、Linux 3.2.0、Mac OS X 10.6.8、Solaris 10 等系统使用 /etc/passwd 文件保存用户信息。（详见 APUE 第三版 P142 图6-1）
+正是由于操作系统之间的这种实现方式不统一，于是便有标准跳出来和稀泥，无论使用哪种方式保存用户信息，通过这两个函数都可以获得到用户的信息，保存在 struct passwd 中。
+
+getpwnam(3) 的作用是根据用户名查找用户信息。
+
+getpwuid(3) 的作用是根据用户 ID 查找用户信息。
+
+struct passwd 定义在 pwd.h 头文件中，具体内容如下：
+复制代码
+
+1 struct passwd {
+2     char   *pw_name;       /* 用户名 */
+3     char   *pw_passwd;     /* 用户口令 */
+4     uid_t   pw_uid;        /* 用户 ID */
+5     gid_t   pw_gid;        /* 用户组 ID */
+6     char   *pw_gecos;      /* user information */
+7     char   *pw_dir;        /* 用户的家目录 */
+8     char   *pw_shell;      /* 用户登录 shell */
+9 };
+
+复制代码
+
+ 
+
+ 
+
+2.getgrnam(3)、getgrgid(3)
+复制代码
+
+1 getgrnam, getgrgid - get group file entry
+2 
+3 #include <sys/types.h>
+4 #include <grp.h>
+5 
+6 struct group *getgrnam(const char *name);
+7 
+8 struct group *getgrgid(gid_t gid);
+
+复制代码
+
+ 
+
+这两个函数的作用和上面那两个函数的作用类似，只不过这次获取的是用户组的数据。
+
+getgrnam(3) 根据用户组名称获得用户组信息。
+
+getgrgid(3) 根据用户组 ID 获得用户组信息。
+
+struct group 定义在 grp.h 头文件中，下面是这个结构体中的内容：
+
+1 struct group {
+2     char   *gr_name;       /* 用户组名称 */
+3     char   *gr_passwd;     /* 用户组密码？什么鬼 */
+4     gid_t   gr_gid;        /* 用户组 ID */
+5     char  **gr_mem;        /* 用户组中的用户列表 */
+6 };
+
+ 这些数据都来自于 /etc/group 文件。
+
+ 
+
+3.阴影口令/etc/shadow
+
+1 >$ ls -l /etc/shadow
+2 ---------- 1 root root 1899 Apr  1 16:25 /etc/shadow
+
+ 可以看到，阴影口令文件的权限是 0000，普通用户无法访问它，但是 root 却可以查看甚至编辑它，这是为什么呢？
+
+因为 root 用户相对于操作系统是神一样的用户，所以任何权限都无法挡住root，除了文件的可执行权限。只有一个文件没有可执行权限时，root 是无法执行它的。
+
+那么既然 root 有权限查看，为什么还要将这个文件的权限设置为 0000 呢？其实就是为了做一个警示的作用，告诫用户这个是系统关键文件，不可以随便玩儿滴。
+
+阴影口令文件在 Redhat 5 中加密用户的密码采用的是 MD5 加密算法，自从山东大学某教授发现了 MD5 的快速碰撞算法之后，Redhat 6 已经采取更安全的 SHA-512 + salt 加密方式。
+
+计算机中没有绝对的安全，通常攻击成本大于收益就认为是安全的了。
+
+比如你花十年的时间破解朋友的 QQ 密码，好不容易破解成功之后发现只能获得其中几个 Q 币而已，那么这就被认为是攻击成本大于收益了。
+
+再比如你花费 3 年的时间研究了某种攻击手段，研究成功之后可以破解任何一个银行的银行卡密码，那么这就认为收益远大于攻击成本。
+
+如何测试一个加密算法是不是好的加密算法呢？用两个密码加密之后做对比，明文有一个字符不同，密文有一半以上不同，那么这个算法基本上就是很可信的了。
+
+为了提高安全性，各种网站也是提供了层出不穷五花八门的解决方案，比如常见的防止脚本攻击的口令随机校验方案。
+
+想想你曾经是否遇到过类似的场景：当你在夜深人静的时候登录某个网站的时候，明明密码输入正确了，却被网站提示密码输入错误，要求再次输入。你也没有在意，觉得可能真的是自己手抖了敲错了，于是便再次输入密码，然后就成功的登录了。然而真的是你第一次把密码输入错了吗？
+
+口令随机校验：输入正确的口令时被告知输入错误，必须连续成功输入两次正确的口令才认为校验通过。
+
+这样可以防止脚本枚举攻击，当攻击者通过社工库等手段获得了你的几个常用密码之后可能会使用脚本尝试登录你的帐号。而口令随机校验被触发时，当脚本尝试输入了一个正确的口令时被告知错误，那么脚本就会继续尝试下一个口令，口令随机校验策略就这样抵挡住了脚本攻击。
+
+当然口令随机校验机制也有一个严重的弊端：很多人难以记得住不同网站上注册的各种不同的口令，于是便经常使用几个常用的口令作为不同网站的密码。当有一天你触发了口令随机校验时，你自己真的以为自己记错了这个网站的密码，于是换一个常用的密码尝试登录，结果再次被提示口令错误，然后再次更换下一个常用的密码尝试登录。。。结果达到了密码错误次数上限，你就这样自己把自己锁死了。
+
+说到这里 LZ 心里不禁一阵坏笑，想要在这插播一段广告。其实 LZ 从来不愁口令太多无法管理的问题，LZ 曾经愁的是每当需要注册一个帐号的时候不知道该用什么密码才合适。终于有一天 LZ 在办理银行卡的时候忍无可忍了，回来便开发了一个 APP，从此 LZ 再也不用担心需要密码的时候没有好的密码可用了，而且高强度的随机密码也可以长期保存起来，需要用的时候随时随地方便的查询。
+
+APP 主要的两个功能就是：根据要求产生随机密码 + 保存生成的密码。
+
+这个 APP 的主页戳这里。由于涉及到口令的管理，为了让大家可以放心的使用，LZ 一开始便把它开源了。如果有什么好点子，你也可以参与开发哟！
+
+好了，上面扯得太远了，咱们继续说阴影口令。
+
+先来看看 /etc/shadow 文件里都有什么内容吧。
+
+    root:$6$JJPwcTjr$stZVq8Tw2P7qS2B9gW8ufbUeLn9wPj4Cg4CzrEMHHTJ68FLWCHCGRsOeHv5TGoqULU6bgLwCw8ahzlOwPw0D0/:16418:0:99999:7:::
+    ......
+    yuhuashi:$6$09LEoJCJ$OB/jY8Giea071CEO/GTQkZA9eFgjJ0isK)eFgJNDmAQu)eFcWGc9kPzt7yGaJKeYUzQ.3.Y7PwcOhnpFIiK./:16418:0:99999:7:::
+    ......
+
+为了节省版面，LZ 删掉了中间好多没有用的用户数据，只保留下来当前系统中启用了的两个用户的数据。当然也不要猜测 LZ 的密码啦，LZ 已经将上面的字符串替换掉一部分了。
+
+文件中每一行是一个用户的信息，每一部分用冒号隔开，最终要的就是前两个冒号隔开的内容：用户名和密码。
+
+而第二部分，也就是密码部分又用 $ 分隔成了3部分，第一部分为加密方式 ID，含义见表1；第二部分是加盐值，也就是密码中的一个杂字串，用于增加加密强度；第三部分就是明文密码 + 杂字串根据第一部分指定的加密方式计算出来的哈希散列密文。
+ID 	加密方式
+1 	MD5
+2a 	Blowfish
+5 	SHA-256
+6 	SHA-512
+
+表1 加密方式 ID 对应的加密方式
+
+那么上面栗子中的 6 就表示采用的是 SHA-512 加密方式。
+
+下面介绍两个函数来操作 /etc/shadow 文件。
+
+1 getspnam - get shadow password file entry
+2 
+3 #include <shadow.h>
+4 
+5 struct spwd *getspnam(const char *name);
+
+ 
+
+getspnam(3) 函数可以根据用户名来获得用户的密码等信息。其实就是在读取 /etc/shadow 文件，所以请注意，使用这个函数的进程必须具有 root 权限。
+
+ 它返回了一个结构体 struct spwd，我们来看下这个结构体里都有哪些成员。
+复制代码
+
+ 1 struct spwd {
+ 2     char *sp_namp;     /* 登录用户名 */
+ 3     char *sp_pwdp;     /* 加密的密码，格式为 $ID$Salt$Pwd */
+ 4     long  sp_lstchg;   /* Date of last change
+ 5                   (measured in days since
+ 6                   1970-01-01 00:00:00 +0000 (UTC)) */
+ 7     long  sp_min;      /* Min # of days between changes */
+ 8     long  sp_max;      /* Max # of days between changes */
+ 9     long  sp_warn;     /* # of days before password expires
+10                   to warn user to change it */
+11     long  sp_inact;    /* # of days after password expires
+12                   until account is disabled */
+13     long  sp_expire;   /* Date when account expires
+14                   (measured in days since
+15                   1970-01-01 00:00:00 +0000 (UTC)) */
+16     unsigned long sp_flag;  /* 保留标志 */
+17 };
+
+复制代码
+
+ 
+
+一般情况下前两个成员已经足够我们使用了。
+
+ 
+
+Linux 系统中也为我们提供了一个简便的加密函数：crypt(3)。
+复制代码
+
+1 crypt - password and data encryption
+2 
+3 #define _XOPEN_SOURCE       /* See feature_test_macros(7) */
+4 #include <unistd.h>
+5 
+6 char *crypt(const char *key, const char *salt);
+7 
+8 Link with -lcrypt.
+
+复制代码
+
+ 
+
+当然，用这个函数稍微有点麻烦，看见上面的宏定义了吧，前面我们遇到过类似的函数。我们再来说一次有关这种宏定义的用法，下次再遇到就不再赘述了。
+
+如果 man 手册中说一个函数在使用之前需要定义一个宏，那么通常你有三种办法：
+
+1.在包含头文件之前定义这个宏，就像手册中写的那样。
+
+2.如果在源文件中没有定义宏，那么就需要在编译的时候通过 -D 参数来指定：gcc -D_XOPEN_SOURCE，注意 -D 参数后面不要加空格，直接写宏名。当然 gcc 是这样用的，其它编译器的用法需要你去查对应编译器的手册了。
+
+3.在 Makefile 的 CFLAGS 中指定编译选项：CFLAGS += -D_XOPEN_SOURCE，这种方式也是针对 gcc 的，其它编译器的用法需要你去查对应的编译器手册。
+
+还要注意的是，链接的时候要加上 -lcrypt 链接选项才行。
+
+参数列表：
+
+key：加密前的明文。
+
+salt：用来指定加密算法和加盐值，格式为 $加密算法ID$Salt$被忽略，加密算法ID 可以从上面 表1 中选择。有木有觉得跟 /etc/shadow 文件中的密码部分很像？该函数只能看见第三个 $ 之前的部分，后面的内容将被忽略。
+
+返回值就跟 /etc/shadow 文件中的密码部分一样了：$加密算法ID$Salt$密文。
+
+用这两个函数我们是不是可以尝试写一个程序模仿 shell 用户登录了呢？
+复制代码
+
+ 1 #include <stdio.h>
+ 2 #include <shadow.h>
+ 3 #include <unistd.h>
+ 4 #include <string.h>
+ 5 
+ 6 int main (int argc, char **argv)
+ 7 {
+ 8     char name[32] = "", *pwd;
+ 9     struct spwd *p;
+10     size_t namelen = 0;
+11 
+12     printf("请输入用户名：");
+13     fgets(name, 32, stdin);
+14     pwd = getpass("请输入密码：");
+15 
+16     namelen = strlen(name);
+17     name[namelen - 1] = 0;
+18     p = getspnam(name);
+19     if (!p) {
+20         fprintf(stderr, "用户名或密码错误！\n");
+21         return -1;
+22     }
+23 
+24     // 由于 getspnam(3) 返回的 sp_pwdp 部分正好符合 crpyt(3) 要求的 salt 参数的规则，所以可以直接作为参数使用，反正 crpyt(3) 会忽略第三个 $ 之后的内容
+25     if (!strcmp(crypt(pwd, p->sp_pwdp), p->sp_pwdp)) {
+26         printf("密码正确！\n");
+27     } else {
+28         fprintf(stderr, "用户名或密码错误！\n");
+29     }
+30 
+31     return 0;
+32 }
+
+复制代码
+
+ 
+
+运行测试：
+
+1 >$ sudo gcc -Wall -D_XOPEN_SOURCE -lcrypt login.c -o login
+2 >$ sudo ./login
+3 请输入用户名：root
+4 请输入密码：
+5 密码正确！
+6 >$
+
+ 
+
+对了，有一个函数还没有介绍，我们平时见到的 Shell 中要求输入口令的时候都是关闭回显的，输入完成后再恢复回显。当然可以通过手动设置参数的方式实现，但是比较麻烦，系统中已经提供了一个现成的函数专门用于获取口令：getpass(3)
+
+1 getpass - get a password
+2 
+3 #include <unistd.h>
+4 
+5 char *getpass( const char *prompt);
+
+ 
+
+参数是显示在 shell 中的提示性文字，返回的就是用户从控制台上输入的字符串。
+
+ 
+
+4.uname(2)
+
+1 uname - get name and information about current kernel
+2 
+3 #include <sys/utsname.h>
+4 
+5 int uname(struct utsname *buf);
+
+ 
+
+uname(1) 命令大家都使用过吧，它就是通过 uname(2) 函数封装的，可以获取到一些内核中的信息。
+
+不是很重要的函数，这里不做详细介绍了，struct utsname 结构体里有哪些成员大家可以自行翻阅 man 手册。
+
+ 
+
+5.时间和日期例程
+
+对日期和时间的操作比较常用，所以这部分还是比较重要的。
+
+时间格式通常分为三种：
+
+第一种是人类喜欢的格式化字符串，例如：2015年 04月 19日 星期日 22:21:29 CST；
+
+第二种是程序猿喜欢的格式：分解时间(struct tm)。其实就是将时间的各个部分分开，保存到一个结构体中，这样在使用的时候灵活性更高。
+
+第三种是计算机喜欢的格式：日历时间(time_t)，也就是大整数，硬件处理起来更方便。例如：1429455918。
+
+APUE 第三版 P153 图6-9 有对这三种时间格式之间关系的详细说明，我这里就不贴图了。
+
+ 
+
+1 time - get time2 
+3 #include <time.h>
+4 
+5 time_t time(time_t *t);
+
+ 
+
+time(3) 函数的作用就是从内核中获取一个日历时间(time_t，大整数)，参数传入 NULL 则可以获取到从 1970-01-01 00:00:00(UTC) 到现在的秒数。
+
+ 
+
+1 localtime - transform date and time to broken-down time  or ASCII
+2 
+3 #include <time.h>
+4 
+5 struct tm *localtime(const time_t *timep);
+
+localtime(3) 函数的作用是将 time_t 大整数转换为程序员喜欢的 tm 结构体，并且是将日历时间转换为本地时间。
+
+我们来看看 struct tm 都有哪些成员：
+复制代码
+
+ 1 struct tm {
+ 2     int tm_sec;         /* 秒，支持润秒 [0 - 60] */
+ 3     int tm_min;         /* 分钟 [0 - 59] */
+ 4     int tm_hour;        /* 小时 [0 - 23] */
+ 5     int tm_mday;        /* 一个月中的第几天 [1 - 31] */
+ 6     int tm_mon;         /* 月份 [0 - 11] */
+ 7     int tm_year;        /* 年，从 1900 开始 */
+ 8     int tm_wday;        /* 一星期中的第几天 [0 - 6] */
+ 9     int tm_yday;        /* 一年中的第几天 [0 - 365] */
+10     int tm_isdst;       /* 夏令时调整，基本不用，如果怕有影响可以设置为 0 */
+11 };
+
+复制代码
+
+ 
+
+看见这个结构体是不是瞬间觉得处理时间容易多了？
+
+ 
+
+1 gmtime  - transform date and time to broken-down time  or ASCII
+2 
+3 #include <time.h>
+4 
+5 struct tm *gmtime(const time_t *timep);
+
+ 
+
+gmtime(3) 函数与 localtime(3) 函数相同，作用也是将 time_t 大整数转换为程序员喜欢的 tm 结构体，但是它将日历时间转换为 UTC 时间而不是转换为本地时间。
+
+ 
+
+1 mktime - transform date and time to broken-down time  or ASCII
+2 
+3 #include <time.h>
+4 
+5 time_t mktime(struct tm *tm);
+
+ 
+
+mktime(3) 函数的作用与上面两个函数的作用正好是相反的，将程序猿喜欢的 struct tm 转换为计算机喜欢的 time_t 类型。
+
+注意到参数 tm 没有加 const 关键字修饰了吗？这说明函数的内部可能会修改入参的值。
+
+它在转换之前会先调整入参的每一个成员，发现有越界的情况会将其调整为合法的状态。
+
+因此我们可以利用它的这种特性来进行时间的计算，比如需要计算 100 天以后的日期，就可以直接在 tm->tm_mday 上面 + 100，经过 mktime(3) 函数调整之后，入参 tm 的值就是 100 天之后的合法日期了。
+
+ 
+
+上面介绍了计算机喜欢的时间格式和程序猿喜欢的时间格式之间的转换方式，下面就介绍一下如何将程序猿喜欢的格式转换为人类喜欢的时间格式。
+
+1 strftime - format date and time
+2 
+3 #include <time.h>
+4 
+5 size_t strftime(char *s, size_t max, const char *format, const struct tm *tm);
+
+ 
+
+这个函数很复杂，使用起来就像 printf(3) 一样，可以通过格式化字符串来控制返回的字符串格式。
+
+参数列表：
+
+　　s：转换完成后的字符串保存在s所指向的空间；
+
+　　max：s 的最大长度
+
+　　format：格式化字符串；用法跟 printf(3) 的 format 是一样的，但是具体格式化参数是不同的，详细的内容请查阅 man 手册。
+
+　　tm：转换的数据来源；
+
+ 
+
+ 日期的处理常用的也就是这些内容了。
